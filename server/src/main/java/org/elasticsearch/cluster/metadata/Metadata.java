@@ -1933,10 +1933,14 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
                         putAlias(key, current.getIndex());
                     }
                 }
-                for (var key : previous.getAliases().keySet()) {
-                    if (current.getAliases().containsKey(key) == false) {
-                        removeAlias(key, current.getIndex());
-                    }
+                removeUnusedAliases(previous, current);
+            }
+        }
+
+        private void removeUnusedAliases(IndexMetadata previous, IndexMetadata current) {
+            for (var key : previous.getAliases().keySet()) {
+                if (current.getAliases().containsKey(key) == false) {
+                    removeAlias(key, current.getIndex());
                 }
             }
         }
