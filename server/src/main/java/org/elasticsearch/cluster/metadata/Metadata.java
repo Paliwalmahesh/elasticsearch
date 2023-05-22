@@ -1916,9 +1916,7 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
 
         void updateAliases(IndexMetadata previous, IndexMetadata current) {
             if (previous == null && current != null) {
-                for (var key : current.getAliases().keySet()) {
-                    putAlias(key, current.getIndex());
-                }
+                includeAliases(current);
             } else if (previous != null && current == null) {
                 for (var key : previous.getAliases().keySet()) {
                     removeAlias(key, previous.getIndex());
@@ -1930,6 +1928,12 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
 
                 addMissingAliases(previous, current);
                 removeUnusedAliases(previous, current);
+            }
+        }
+
+        private void includeAliases(IndexMetadata current) {
+            for (var key : current.getAliases().keySet()) {
+                putAlias(key, current.getIndex());
             }
         }
 
