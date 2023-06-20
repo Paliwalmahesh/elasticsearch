@@ -3132,23 +3132,27 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                 final List<IndexShard> startedShards = new ArrayList<>();
                 final IndexService sourceIndexService = indicesService.indexService(resizeSourceIndex);
                 RequiredShardVerifier requiredShardVerifier = getRequiredShardVerifier(indexMetadata, startedShards, sourceIndexService);
-                if (requiredShardVerifier.numShards() == startedShards.size()) {
-                    assert requiredShardVerifier.requiredShards().isEmpty() == false;
-                    executeRecovery(
-                        "from local shards",
-                        recoveryState,
-                        recoveryListener,
-                        l -> recoverFromLocalShards(
-                            mappingUpdateConsumer,
-                            startedShards.stream().filter((s) -> requiredShardVerifier.requiredShards().contains(s.shardId())).toList(),
-                            l
-                        )
-                    );
-                } else {
-                    analyzeNumShardsException(resizeSourceIndex, startedShards, requiredShardVerifier);
-                }
+                checkAndExecuteShardRecovery(recoveryState, recoveryListener, mappingUpdateConsumer, resizeSourceIndex, startedShards, requiredShardVerifier);
             }
             default -> throw new IllegalArgumentException("Unknown recovery source " + recoveryState.getRecoverySource());
+        }
+    }
+
+    private void checkAndExecuteShardRecovery(RecoveryState recoveryState, PeerRecoveryTargetService.RecoveryListener recoveryListener, BiConsumer<MappingMetadata, ActionListener<Void>> mappingUpdateConsumer, Index resizeSourceIndex, List<IndexShard> startedShards, RequiredShardVerifier requiredShardVerifier) {
+        if (requiredShardVerifier.numShards() == startedShards.size()) {
+            assert requiredShardVerifier.requiredShards().isEmpty() == false;
+            executeRecovery(
+                "from local shards",
+                recoveryState,
+                recoveryListener,
+                l -> recoverFromLocalShards(
+                    mappingUpdateConsumer,
+                    startedShards.stream().filter((s) -> requiredShardVerifier.requiredShards().contains(s.shardId())).toList(),
+                    l
+                )
+            );
+        } else {
+            analyzeNumShardsException(resizeSourceIndex, startedShards, requiredShardVerifier);
         }
     }
 
