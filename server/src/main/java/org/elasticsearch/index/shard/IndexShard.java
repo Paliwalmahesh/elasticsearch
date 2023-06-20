@@ -2161,15 +2161,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         if (origin.isRecovery()) {
             isIndexShardStateRecovering(origin, state);
         } else {
-            if (origin == Engine.Operation.Origin.PRIMARY) {
-                assert assertPrimaryMode();
-            } else if (origin == Engine.Operation.Origin.REPLICA) {
-                assert assertReplicationTarget();
-            } else {
-                assert origin == Engine.Operation.Origin.LOCAL_RESET;
-                assert getActiveOperationsCount() == OPERATIONS_BLOCKED
-                    : "locally resetting without blocking operations, active operations [" + getActiveOperationsCount() + "]";
-            }
+            checkOriginStatus(origin);
             if (writeAllowedStates.contains(state) == false) {
                 throw new IllegalIndexShardStateException(
                     shardId,
@@ -2177,6 +2169,18 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                     "operation only allowed when shard state is one of " + writeAllowedStates + ", origin [" + origin + "]"
                 );
             }
+        }
+    }
+
+    private void checkOriginStatus(Engine.Operation.Origin origin) {
+        if (origin == Engine.Operation.Origin.PRIMARY) {
+            assert assertPrimaryMode();
+        } else if (origin == Engine.Operation.Origin.REPLICA) {
+            assert assertReplicationTarget();
+        } else {
+            assert origin == Engine.Operation.Origin.LOCAL_RESET;
+            assert getActiveOperationsCount() == OPERATIONS_BLOCKED
+                : "locally resetting without blocking operations, active operations [" + getActiveOperationsCount() + "]";
         }
     }
 
