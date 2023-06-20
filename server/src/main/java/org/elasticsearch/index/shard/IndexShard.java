@@ -3121,13 +3121,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         switch (recoveryState.getRecoverySource().getType()) {
             case EMPTY_STORE, EXISTING_STORE -> executeRecovery("from store", recoveryState, recoveryListener, this::recoverFromStore);
             case PEER -> {
-                try {
-                    markAsRecovering("from " + recoveryState.getSourceNode(), recoveryState);
-                    recoveryTargetService.startRecovery(this, recoveryState.getSourceNode(), recoveryListener);
-                } catch (Exception e) {
-                    failShard("corrupted preexisting index", e);
-                    recoveryListener.onRecoveryFailure(new RecoveryFailedException(recoveryState, null, e), true);
-                }
+                startRecoveryProcess(recoveryState, recoveryTargetService, recoveryListener);
             }
             case SNAPSHOT -> {
                 final String repo = ((SnapshotRecoverySource) recoveryState.getRecoverySource()).snapshot().getRepository();
@@ -3193,6 +3187,16 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                 }
             }
             default -> throw new IllegalArgumentException("Unknown recovery source " + recoveryState.getRecoverySource());
+        }
+    }
+
+    private void startRecoveryProcess(RecoveryState recoveryState, PeerRecoveryTargetService recoveryTargetService, PeerRecoveryTargetService.RecoveryListener recoveryListener) {
+        try {
+            markAsRecovering("from " + recoveryState.getSourceNode(), recoveryState);
+            recoveryTargetService.startRecovery(this, recoveryState.getSourceNode(), recoveryListener);
+        } catch (Exception e) {
+            failShard("corrupted preexisting index", e);
+            recoveryListener.onRecoveryFailure(new RecoveryFailedException(recoveryState, null, e), true);
         }
     }
 
