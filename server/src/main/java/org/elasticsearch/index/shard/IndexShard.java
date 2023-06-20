@@ -2977,18 +2977,23 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
             verifyCheckSums();
         } else {
             // full checkindex
-            final BytesStreamOutput os = new BytesStreamOutput();
-            final PrintStream out = new PrintStream(os, false, StandardCharsets.UTF_8.name());
-            final CheckIndex.Status status = store.checkIndex(out);
-            out.flush();
-            if (isUnCleanedShardClosed(os, status)) return;
-
-            if (logger.isDebugEnabled()) {
-                logger.debug("check index [success]\n{}", os.bytes().utf8ToString());
-            }
+            if (performIndexCheck()) return;
         }
 
         recoveryState.getVerifyIndex().checkIndexTime(Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - timeNS)));
+    }
+
+    private boolean performIndexCheck() throws IOException {
+        final BytesStreamOutput os = new BytesStreamOutput();
+        final PrintStream out = new PrintStream(os, false, StandardCharsets.UTF_8.name());
+        final CheckIndex.Status status = store.checkIndex(out);
+        out.flush();
+        if (isUnCleanedShardClosed(os, status)) return true;
+
+        if (logger.isDebugEnabled()) {
+            logger.debug("check index [success]\n{}", os.bytes().utf8ToString());
+        }
+        return false;
     }
 
     private void verifyCheckSums() throws IOException {
