@@ -3131,42 +3131,29 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                 final Index resizeSourceIndex = indexMetadata.getResizeSourceIndex();
                 final List<IndexShard> startedShards = new ArrayList<>();
                 final IndexService sourceIndexService = indicesService.indexService(resizeSourceIndex);
-                final Set<ShardId> requiredShards;
-                final int numShards;
-                if (sourceIndexService != null) {
-                    requiredShards = IndexMetadata.selectRecoverFromShards(
-                        shardId().id(),
-                        sourceIndexService.getMetadata(),
-                        indexMetadata.getNumberOfShards()
-                    );
-                    populateStartedShards(startedShards, sourceIndexService, requiredShards);
-                    numShards = requiredShards.size();
-                } else {
-                    numShards = -1;
-                    requiredShards = Collections.emptySet();
-                }
-                if (numShards == startedShards.size()) {
-                    assert requiredShards.isEmpty() == false;
+                RequiredShardVerifier requiredShardVerifier = getRequiredShardVerifier(indexMetadata, startedShards, sourceIndexService);
+                if (requiredShardVerifier.numShards() == startedShards.size()) {
+                    assert requiredShardVerifier.requiredShards().isEmpty() == false;
                     executeRecovery(
                         "from local shards",
                         recoveryState,
                         recoveryListener,
                         l -> recoverFromLocalShards(
                             mappingUpdateConsumer,
-                            startedShards.stream().filter((s) -> requiredShards.contains(s.shardId())).toList(),
+                            startedShards.stream().filter((s) -> requiredShardVerifier.requiredShards().contains(s.shardId())).toList(),
                             l
                         )
                     );
                 } else {
                     final RuntimeException e;
-                    if (numShards == -1) {
+                    if (requiredShardVerifier.numShards() == -1) {
                         e = new IndexNotFoundException(resizeSourceIndex);
                     } else {
                         e = new IllegalStateException(
                             "not all required shards of index "
                                 + resizeSourceIndex
                                 + " are started yet, expected "
-                                + numShards
+                                + requiredShardVerifier.numShards()
                                 + " found "
                                 + startedShards.size()
                                 + " can't recover shard "
@@ -3178,6 +3165,28 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
             }
             default -> throw new IllegalArgumentException("Unknown recovery source " + recoveryState.getRecoverySource());
         }
+    }
+
+    private RequiredShardVerifier getRequiredShardVerifier(IndexMetadata indexMetadata, List<IndexShard> startedShards, IndexService sourceIndexService) {
+        final Set<ShardId> requiredShards;
+        final int numShards;
+        if (sourceIndexService != null) {
+            requiredShards = IndexMetadata.selectRecoverFromShards(
+                shardId().id(),
+                sourceIndexService.getMetadata(),
+                indexMetadata.getNumberOfShards()
+            );
+            populateStartedShards(startedShards, sourceIndexService, requiredShards);
+            numShards = requiredShards.size();
+        } else {
+            numShards = -1;
+            requiredShards = Collections.emptySet();
+        }
+        RequiredShardVerifier requiredShardVerifier = new RequiredShardVerifier(requiredShards, numShards);
+        return requiredShardVerifier;
+    }
+
+    private record RequiredShardVerifier(Set<ShardId> requiredShards, int numShards) {
     }
 
     private static void populateStartedShards(List<IndexShard> startedShards, IndexService sourceIndexService, Set<ShardId> requiredShards) {
