@@ -2159,13 +2159,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         IndexShardState state = this.state; // one time volatile read
 
         if (origin.isRecovery()) {
-            if (state != IndexShardState.RECOVERING) {
-                throw new IllegalIndexShardStateException(
-                    shardId,
-                    state,
-                    "operation only allowed when recovering, origin [" + origin + "]"
-                );
-            }
+            isIndexShardStateRecovering(origin, state);
         } else {
             if (origin == Engine.Operation.Origin.PRIMARY) {
                 assert assertPrimaryMode();
@@ -2183,6 +2177,16 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                     "operation only allowed when shard state is one of " + writeAllowedStates + ", origin [" + origin + "]"
                 );
             }
+        }
+    }
+
+    private void isIndexShardStateRecovering(Engine.Operation.Origin origin, IndexShardState state) {
+        if (state != IndexShardState.RECOVERING) {
+            throw new IllegalIndexShardStateException(
+                shardId,
+                state,
+                "operation only allowed when recovering, origin [" + origin + "]"
+            );
         }
     }
 
