@@ -3145,26 +3145,30 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                         )
                     );
                 } else {
-                    final RuntimeException e;
-                    if (requiredShardVerifier.numShards() == -1) {
-                        e = new IndexNotFoundException(resizeSourceIndex);
-                    } else {
-                        e = new IllegalStateException(
-                            "not all required shards of index "
-                                + resizeSourceIndex
-                                + " are started yet, expected "
-                                + requiredShardVerifier.numShards()
-                                + " found "
-                                + startedShards.size()
-                                + " can't recover shard "
-                                + shardId()
-                        );
-                    }
-                    throw e;
+                    analyzeNumShardsException(resizeSourceIndex, startedShards, requiredShardVerifier);
                 }
             }
             default -> throw new IllegalArgumentException("Unknown recovery source " + recoveryState.getRecoverySource());
         }
+    }
+
+    private void analyzeNumShardsException(Index resizeSourceIndex, List<IndexShard> startedShards, RequiredShardVerifier requiredShardVerifier) {
+        final RuntimeException e;
+        if (requiredShardVerifier.numShards() == -1) {
+            e = new IndexNotFoundException(resizeSourceIndex);
+        } else {
+            e = new IllegalStateException(
+                "not all required shards of index "
+                    + resizeSourceIndex
+                    + " are started yet, expected "
+                    + requiredShardVerifier.numShards()
+                    + " found "
+                    + startedShards.size()
+                    + " can't recover shard "
+                    + shardId()
+            );
+        }
+        throw e;
     }
 
     private RequiredShardVerifier getRequiredShardVerifier(IndexMetadata indexMetadata, List<IndexShard> startedShards, IndexService sourceIndexService) {
