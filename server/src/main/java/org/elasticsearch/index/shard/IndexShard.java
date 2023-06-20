@@ -2162,13 +2162,17 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
             isIndexShardStateRecovering(origin, state);
         } else {
             checkOriginStatus(origin);
-            if (writeAllowedStates.contains(state) == false) {
-                throw new IllegalIndexShardStateException(
-                    shardId,
-                    state,
-                    "operation only allowed when shard state is one of " + writeAllowedStates + ", origin [" + origin + "]"
-                );
-            }
+            checkWriteAllowedStates(origin, state);
+        }
+    }
+
+    private void checkWriteAllowedStates(Engine.Operation.Origin origin, IndexShardState state) {
+        if (writeAllowedStates.contains(state) == false) {
+            throw new IllegalIndexShardStateException(
+                shardId,
+                state,
+                "operation only allowed when shard state is one of " + writeAllowedStates + ", origin [" + origin + "]"
+            );
         }
     }
 
