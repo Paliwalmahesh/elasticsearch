@@ -3139,11 +3139,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                         sourceIndexService.getMetadata(),
                         indexMetadata.getNumberOfShards()
                     );
-                    for (IndexShard shard : sourceIndexService) {
-                        if (shard.state() == IndexShardState.STARTED && requiredShards.contains(shard.shardId())) {
-                            startedShards.add(shard);
-                        }
-                    }
+                    populateStartedShards(startedShards, sourceIndexService, requiredShards);
                     numShards = requiredShards.size();
                 } else {
                     numShards = -1;
@@ -3181,6 +3177,14 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                 }
             }
             default -> throw new IllegalArgumentException("Unknown recovery source " + recoveryState.getRecoverySource());
+        }
+    }
+
+    private static void populateStartedShards(List<IndexShard> startedShards, IndexService sourceIndexService, Set<ShardId> requiredShards) {
+        for (IndexShard shard : sourceIndexService) {
+            if (shard.state() == IndexShardState.STARTED && requiredShards.contains(shard.shardId())) {
+                startedShards.add(shard);
+            }
         }
     }
 
