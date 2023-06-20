@@ -2974,13 +2974,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
 
         if ("checksum".equals(checkIndexOnStartup)) {
             // physical verification only: verify all checksums for the latest commit
-            final MetadataSnapshot metadata = getMetadataSnapshot();
-            final List<String> checkedFiles = new ArrayList<>(metadata.size());
-            IOException corrupt = checkIndexIntegrity(metadata, checkedFiles);
-            if (corrupt != null) {
-                throw corrupt;
-            }
-            logChecksumPassed(checkedFiles);
+            verifyCheckSums();
         } else {
             // full checkindex
             final BytesStreamOutput os = new BytesStreamOutput();
@@ -2995,6 +2989,16 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         }
 
         recoveryState.getVerifyIndex().checkIndexTime(Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - timeNS)));
+    }
+
+    private void verifyCheckSums() throws IOException {
+        final MetadataSnapshot metadata = getMetadataSnapshot();
+        final List<String> checkedFiles = new ArrayList<>(metadata.size());
+        IOException corrupt = checkIndexIntegrity(metadata, checkedFiles);
+        if (corrupt != null) {
+            throw corrupt;
+        }
+        logChecksumPassed(checkedFiles);
     }
 
     private boolean isUnCleanedShardClosed(BytesStreamOutput os, CheckIndex.Status status) throws IOException {
