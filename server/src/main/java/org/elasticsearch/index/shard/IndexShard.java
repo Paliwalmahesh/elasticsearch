@@ -3124,13 +3124,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                 startRecoveryProcess(recoveryState, recoveryTargetService, recoveryListener);
             }
             case SNAPSHOT -> {
-                final String repo = ((SnapshotRecoverySource) recoveryState.getRecoverySource()).snapshot().getRepository();
-                executeRecovery(
-                    "from snapshot",
-                    recoveryState,
-                    recoveryListener,
-                    l -> restoreFromRepository(repositoriesService.repository(repo), l)
-                );
+                recoverFromSnapshot(recoveryState, recoveryListener, repositoriesService);
             }
             case LOCAL_SHARDS -> {
                 final IndexMetadata indexMetadata = indexSettings().getIndexMetadata();
@@ -3188,6 +3182,16 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
             }
             default -> throw new IllegalArgumentException("Unknown recovery source " + recoveryState.getRecoverySource());
         }
+    }
+
+    private void recoverFromSnapshot(RecoveryState recoveryState, PeerRecoveryTargetService.RecoveryListener recoveryListener, RepositoriesService repositoriesService) {
+        final String repo = ((SnapshotRecoverySource) recoveryState.getRecoverySource()).snapshot().getRepository();
+        executeRecovery(
+            "from snapshot",
+            recoveryState,
+            recoveryListener,
+            l -> restoreFromRepository(repositoriesService.repository(repo), l)
+        );
     }
 
     private void startRecoveryProcess(RecoveryState recoveryState, PeerRecoveryTargetService recoveryTargetService, PeerRecoveryTargetService.RecoveryListener recoveryListener) {
