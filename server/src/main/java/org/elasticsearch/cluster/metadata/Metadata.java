@@ -1515,10 +1515,65 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
     @Override
     public Iterator<? extends ToXContent> toXContentChunked(ToXContent.Params p) {
         XContentContext context = XContentContext.valueOf(p.param(CONTEXT_MODE_PARAM, CONTEXT_MODE_API));
-        final Iterator<? extends ToXContent> start = context == XContentContext.API
-            ? ChunkedToXContentHelper.startObject("metadata")
-            : Iterators.single((builder, params) -> builder.startObject("meta-data").field("version", version()));
+        final Iterator<? extends ToXContent> start = getStart(context);
 
+        final Iterator<? extends ToXContent> persistentSettings = getPersistentSettings(context);
+
+        final Iterator<? extends ToXContent> indices = getIndices(context);
+
+        return Iterators.concat(start, Iterators.<ToXContent>single(getToXContent()),
+            persistentSettings,
+            getToXContentIterator(),
+            indices,
+            getIteratorFlatMap(p, context),
+            ChunkedToXContentHelper.wrapWithObject("reserved_state", reservedStateMetadata().values().iterator()),
+            ChunkedToXContentHelper.endObject()
+        );
+    }
+
+    private Iterator<? extends ToXContent> getIteratorFlatMap(ToXContent.Params p, XContentContext context) {
+        return Iterators.flatMap(
+            customs.entrySet().iterator(),
+            entry -> entry.getValue().context().contains(context)
+                ? ChunkedToXContentHelper.wrapWithObject(entry.getKey(), entry.getValue().toXContentChunked(p))
+                : Collections.emptyIterator()
+        );
+    }
+
+    private Iterator<ToXContent> getToXContentIterator() {
+        return ChunkedToXContentHelper.wrapWithObject(
+            "templates",
+            templates().values()
+                .stream()
+                .map(
+                    template -> (ToXContent) (builder, params) -> IndexTemplateMetadata.Builder.toXContentWithTypes(
+                        template,
+                        builder,
+                        params
+                    )
+                )
+                .iterator()
+        );
+    }
+
+    private ToXContent getToXContent() {
+        return (builder, params) -> {
+            builder.field("cluster_uuid", clusterUUID);
+            builder.field("cluster_uuid_committed", clusterUUIDCommitted);
+            builder.startObject("cluster_coordination");
+            coordinationMetadata().toXContent(builder, params);
+            return builder.endObject();
+        };
+    }
+
+    private Iterator<? extends ToXContent> getIndices(XContentContext context) {
+        final Iterator<? extends ToXContent> indices = context == XContentContext.API
+            ? ChunkedToXContentHelper.wrapWithObject("indices", indices().values().iterator())
+            : Collections.emptyIterator();
+        return indices;
+    }
+
+    private Iterator<? extends ToXContent> getPersistentSettings(XContentContext context) {
         final Iterator<? extends ToXContent> persistentSettings = context != XContentContext.API && persistentSettings().isEmpty() == false
             ? Iterators.single((builder, params) -> {
                 builder.startObject("settings");
@@ -1526,42 +1581,14 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
                 return builder.endObject();
             })
             : Collections.emptyIterator();
+        return persistentSettings;
+    }
 
-        final Iterator<? extends ToXContent> indices = context == XContentContext.API
-            ? ChunkedToXContentHelper.wrapWithObject("indices", indices().values().iterator())
-            : Collections.emptyIterator();
-
-        return Iterators.concat(start, Iterators.<ToXContent>single((builder, params) -> {
-            builder.field("cluster_uuid", clusterUUID);
-            builder.field("cluster_uuid_committed", clusterUUIDCommitted);
-            builder.startObject("cluster_coordination");
-            coordinationMetadata().toXContent(builder, params);
-            return builder.endObject();
-        }),
-            persistentSettings,
-            ChunkedToXContentHelper.wrapWithObject(
-                "templates",
-                templates().values()
-                    .stream()
-                    .map(
-                        template -> (ToXContent) (builder, params) -> IndexTemplateMetadata.Builder.toXContentWithTypes(
-                            template,
-                            builder,
-                            params
-                        )
-                    )
-                    .iterator()
-            ),
-            indices,
-            Iterators.flatMap(
-                customs.entrySet().iterator(),
-                entry -> entry.getValue().context().contains(context)
-                    ? ChunkedToXContentHelper.wrapWithObject(entry.getKey(), entry.getValue().toXContentChunked(p))
-                    : Collections.emptyIterator()
-            ),
-            ChunkedToXContentHelper.wrapWithObject("reserved_state", reservedStateMetadata().values().iterator()),
-            ChunkedToXContentHelper.endObject()
-        );
+    private Iterator<? extends ToXContent> getStart(XContentContext context) {
+        final Iterator<? extends ToXContent> start = context == XContentContext.API
+            ? ChunkedToXContentHelper.startObject("metadata")
+            : Iterators.single((builder, params) -> builder.startObject("meta-data").field("version", version()));
+        return start;
     }
 
     public Map<String, MappingMetadata> getMappingsByHash() {
