@@ -2631,22 +2631,25 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
             SortedMap<String, IndexAbstraction> indicesLookup = new TreeMap<>();
             Map<String, DataStream> indexToDataStreamLookup = new HashMap<>();
             final var dataStreams = dataStreamMetadata.dataStreams();
-            for (DataStreamAlias alias : dataStreamMetadata.getDataStreamAliases().values()) {
-                IndexAbstraction existing = indicesLookup.put(alias.getName(), makeDsAliasAbstraction(dataStreams, alias));
-                assert existing == null : "duplicate data stream alias for " + alias.getName();
-            }
-            for (DataStream dataStream : dataStreams.values()) {
-                assert dataStream.getIndices().isEmpty() == false;
-
-                IndexAbstraction existing = indicesLookup.put(dataStream.getName(), dataStream);
-                assert existing == null : "duplicate data stream for " + dataStream.getName();
-
-                for (Index i : dataStream.getIndices()) {
-                    indexToDataStreamLookup.put(i.getName(), dataStream);
-                }
-            }
+            buildIndexLookupMap(dataStreamMetadata, indicesLookup, indexToDataStreamLookup, dataStreams);
 
             Map<String, List<IndexMetadata>> aliasToIndices = new HashMap<>();
+            getAliasToIndices(indices, indicesLookup, indexToDataStreamLookup, aliasToIndices);
+
+            populateIndicesWithAliases(indicesLookup, aliasToIndices);
+
+            return Collections.unmodifiableSortedMap(indicesLookup);
+        }
+
+        private static void populateIndicesWithAliases(SortedMap<String, IndexAbstraction> indicesLookup, Map<String, List<IndexMetadata>> aliasToIndices) {
+            for (var entry : aliasToIndices.entrySet()) {
+                AliasMetadata alias = entry.getValue().get(0).getAliases().get(entry.getKey());
+                IndexAbstraction existing = indicesLookup.put(entry.getKey(), new IndexAbstraction.Alias(alias, entry.getValue()));
+                assert existing == null : "duplicate for " + entry.getKey();
+            }
+        }
+
+        private static void getAliasToIndices(ImmutableOpenMap<String, IndexMetadata> indices, SortedMap<String, IndexAbstraction> indicesLookup, Map<String, DataStream> indexToDataStreamLookup, Map<String, List<IndexMetadata>> aliasToIndices) {
             for (var entry : indices.entrySet()) {
                 final String name = entry.getKey();
                 final IndexMetadata indexMetadata = entry.getValue();
@@ -2661,14 +2664,23 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
                     aliasIndices.add(indexMetadata);
                 }
             }
+        }
 
-            for (var entry : aliasToIndices.entrySet()) {
-                AliasMetadata alias = entry.getValue().get(0).getAliases().get(entry.getKey());
-                IndexAbstraction existing = indicesLookup.put(entry.getKey(), new IndexAbstraction.Alias(alias, entry.getValue()));
-                assert existing == null : "duplicate for " + entry.getKey();
+        private static void buildIndexLookupMap(DataStreamMetadata dataStreamMetadata, SortedMap<String, IndexAbstraction> indicesLookup, Map<String, DataStream> indexToDataStreamLookup, Map<String, DataStream> dataStreams) {
+            for (DataStreamAlias alias : dataStreamMetadata.getDataStreamAliases().values()) {
+                IndexAbstraction existing = indicesLookup.put(alias.getName(), makeDsAliasAbstraction(dataStreams, alias));
+                assert existing == null : "duplicate data stream alias for " + alias.getName();
             }
+            for (DataStream dataStream : dataStreams.values()) {
+                assert dataStream.getIndices().isEmpty() == false;
 
-            return Collections.unmodifiableSortedMap(indicesLookup);
+                IndexAbstraction existing = indicesLookup.put(dataStream.getName(), dataStream);
+                assert existing == null : "duplicate data stream for " + dataStream.getName();
+
+                for (Index i : dataStream.getIndices()) {
+                    indexToDataStreamLookup.put(i.getName(), dataStream);
+                }
+            }
         }
 
         private static IndexAbstraction.Alias makeDsAliasAbstraction(Map<String, DataStream> dataStreams, DataStreamAlias alias) {
