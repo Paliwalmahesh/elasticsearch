@@ -2974,63 +2974,95 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
 
         if ("checksum".equals(checkIndexOnStartup)) {
             // physical verification only: verify all checksums for the latest commit
-            IOException corrupt = null;
-            final MetadataSnapshot metadata;
-            try {
-                metadata = snapshotStoreMetadata();
-            } catch (IOException e) {
-                logger.warn("check index [failure]", e);
-                throw e;
-            }
-            final List<String> checkedFiles = new ArrayList<>(metadata.size());
-            for (Map.Entry<String, StoreFileMetadata> entry : metadata.fileMetadataMap().entrySet()) {
-                try {
-                    Store.checkIntegrity(entry.getValue(), store.directory());
-                    if (corrupt == null) {
-                        checkedFiles.add(entry.getKey());
-                    } else {
-                        logger.info("check index [ok]: checksum check passed on [{}]", entry.getKey());
-                    }
-                } catch (IOException ioException) {
-                    for (final String checkedFile : checkedFiles) {
-                        logger.info("check index [ok]: checksum check passed on [{}]", checkedFile);
-                    }
-                    checkedFiles.clear();
-                    logger.warn(() -> "check index [failure]: checksum failed on [" + entry.getKey() + "]", ioException);
-                    corrupt = ioException;
-                }
-            }
-            if (corrupt != null) {
-                throw corrupt;
-            }
-            if (logger.isDebugEnabled()) {
-                for (final String checkedFile : checkedFiles) {
-                    logger.debug("check index [ok]: checksum check passed on [{}]", checkedFile);
-                }
-            }
+            verifyCheckSums();
         } else {
             // full checkindex
-            final BytesStreamOutput os = new BytesStreamOutput();
-            final PrintStream out = new PrintStream(os, false, StandardCharsets.UTF_8.name());
-            final CheckIndex.Status status = store.checkIndex(out);
-            out.flush();
-            if (status.clean == false) {
-                if (state == IndexShardState.CLOSED) {
-                    // ignore if closed....
-                    return;
-                }
-                logger.warn("check index [failure]");
-                // report details in a separate message, it might contain control characters which mess up detection of the failure message
-                logger.warn("{}", os.bytes().utf8ToString());
-                throw new IOException("index check failure");
-            }
-
-            if (logger.isDebugEnabled()) {
-                logger.debug("check index [success]\n{}", os.bytes().utf8ToString());
-            }
+            if (performIndexCheck()) return;
         }
 
         recoveryState.getVerifyIndex().checkIndexTime(Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - timeNS)));
+    }
+
+    private boolean performIndexCheck() throws IOException {
+        final BytesStreamOutput os = new BytesStreamOutput();
+        final PrintStream out = new PrintStream(os, false, StandardCharsets.UTF_8.name());
+        final CheckIndex.Status status = store.checkIndex(out);
+        out.flush();
+        if (isUnCleanedShardClosed(os, status)) return true;
+
+        if (logger.isDebugEnabled()) {
+            logger.debug("check index [success]\n{}", os.bytes().utf8ToString());
+        }
+        return false;
+    }
+
+    private void verifyCheckSums() throws IOException {
+        final MetadataSnapshot metadata = getMetadataSnapshot();
+        final List<String> checkedFiles = new ArrayList<>(metadata.size());
+        IOException corrupt = checkIndexIntegrity(metadata, checkedFiles);
+        if (corrupt != null) {
+            throw corrupt;
+        }
+        logChecksumPassed(checkedFiles);
+    }
+
+    private boolean isUnCleanedShardClosed(BytesStreamOutput os, CheckIndex.Status status) throws IOException {
+        if (status.clean == false) {
+            if (state == IndexShardState.CLOSED) {
+                // ignore if closed....
+                return true;
+            }
+            logger.warn("check index [failure]");
+            // report details in a separate message, it might contain control characters which mess up detection of the failure message
+            logger.warn("{}", os.bytes().utf8ToString());
+            throw new IOException("index check failure");
+        }
+        return false;
+    }
+
+    private void logChecksumPassed(List<String> checkedFiles) {
+        if (logger.isDebugEnabled()) {
+            for (final String checkedFile : checkedFiles) {
+                logger.debug("check index [ok]: checksum check passed on [{}]", checkedFile);
+            }
+        }
+    }
+
+    private IOException checkIndexIntegrity(MetadataSnapshot metadata, List<String> checkedFiles) {
+        IOException corrupt = null;
+        for (Map.Entry<String, StoreFileMetadata> entry : metadata.fileMetadataMap().entrySet()) {
+            try {
+                Store.checkIntegrity(entry.getValue(), store.directory());
+                addEntryInCheckFiles(corrupt, checkedFiles, entry);
+            } catch (IOException ioException) {
+                for (final String checkedFile : checkedFiles) {
+                    logger.info("check index [ok]: checksum check passed on [{}]", checkedFile);
+                }
+                checkedFiles.clear();
+                logger.warn(() -> "check index [failure]: checksum failed on [" + entry.getKey() + "]", ioException);
+                corrupt = ioException;
+            }
+        }
+        return corrupt;
+    }
+
+    private void addEntryInCheckFiles(IOException corrupt, List<String> checkedFiles, Map.Entry<String, StoreFileMetadata> entry) {
+        if (corrupt == null) {
+            checkedFiles.add(entry.getKey());
+        } else {
+            logger.info("check index [ok]: checksum check passed on [{}]", entry.getKey());
+        }
+    }
+
+    private MetadataSnapshot getMetadataSnapshot() throws IOException {
+        final MetadataSnapshot metadata;
+        try {
+            metadata = snapshotStoreMetadata();
+        } catch (IOException e) {
+            logger.warn("check index [failure]", e);
+            throw e;
+        }
+        return metadata;
     }
 
     Engine getEngine() {
