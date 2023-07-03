@@ -1702,6 +1702,7 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
         return builder.build();
     }
 
+    @SuppressWarnings("ConstantValue")
     public static class Builder {
 
         private String clusterUUID;
@@ -1894,28 +1895,46 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
 
         void updateAliases(IndexMetadata previous, IndexMetadata current) {
             if (previous == null && current != null) {
-                for (var key : current.getAliases().keySet()) {
+                includeAliases(current);
+            } else if (previous != null && current == null) {
+                excludeAliases(previous);
+            } else if (previous != null && current != null) {
+                synchronizeAliases(previous, current);
+            }
+        }
+
+        private void synchronizeAliases(IndexMetadata previous, IndexMetadata current) {
+            if (!Objects.equals(previous.getAliases(), current.getAliases())) {
+                addMissingAliases(previous, current);
+                removeUnusedAliases(previous, current);
+            }
+        }
+
+        private void removeUnusedAliases(IndexMetadata previous, IndexMetadata current) {
+            for (var key : previous.getAliases().keySet()) {
+                if (current.getAliases().containsKey(key) == false) {
+                    removeAlias(key, current.getIndex());
+                }
+            }
+        }
+
+        private void addMissingAliases(IndexMetadata previous, IndexMetadata current) {
+            for (var key : current.getAliases().keySet()) {
+                if (previous.getAliases().containsKey(key) == false) {
                     putAlias(key, current.getIndex());
                 }
-            } else if (previous != null && current == null) {
-                for (var key : previous.getAliases().keySet()) {
-                    removeAlias(key, previous.getIndex());
-                }
-            } else if (previous != null && current != null) {
-                if (Objects.equals(previous.getAliases(), current.getAliases())) {
-                    return;
-                }
+            }
+        }
 
-                for (var key : current.getAliases().keySet()) {
-                    if (previous.getAliases().containsKey(key) == false) {
-                        putAlias(key, current.getIndex());
-                    }
-                }
-                for (var key : previous.getAliases().keySet()) {
-                    if (current.getAliases().containsKey(key) == false) {
-                        removeAlias(key, current.getIndex());
-                    }
-                }
+        private void excludeAliases(IndexMetadata previous) {
+            for (var key : previous.getAliases().keySet()) {
+                removeAlias(key, previous.getIndex());
+            }
+        }
+
+        private void includeAliases(IndexMetadata current) {
+            for (var key : current.getAliases().keySet()) {
+                putAlias(key, current.getIndex());
             }
         }
 
