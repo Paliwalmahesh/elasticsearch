@@ -2857,4 +2857,11 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             throw new IllegalArgumentException("unable to parse the index name [" + indexName + "] to extract the counter", e);
         }
     }
+    public boolean isStateOpen(){
+        return this.getState() == State.OPEN;
+    }
+    public boolean isStateClose(){
+        return this.getState() == State.CLOSE;
+    }
+
 }

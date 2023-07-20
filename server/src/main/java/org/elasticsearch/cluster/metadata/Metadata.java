@@ -303,13 +303,13 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
             .filter(entry -> predicate.test(entry.getValue()))
             .map(Map.Entry::getKey)
             .collect(Collectors.toUnmodifiableSet());
-        assert Set.of(allOpenIndices).equals(indicesByPredicate.apply(idx -> idx.getState() == IndexMetadata.State.OPEN));
-        assert Set.of(allClosedIndices).equals(indicesByPredicate.apply(idx -> idx.getState() == IndexMetadata.State.CLOSE));
+        assert Set.of(allOpenIndices).equals(indicesByPredicate.apply(idx -> idx.isStateOpen()));
+        assert Set.of(allClosedIndices).equals(indicesByPredicate.apply(idx -> idx.isStateClose()));
         assert Set.of(visibleIndices).equals(indicesByPredicate.apply(idx -> idx.isHidden() == false));
         assert Set.of(visibleOpenIndices)
-            .equals(indicesByPredicate.apply(idx -> idx.isHidden() == false && idx.getState() == IndexMetadata.State.OPEN));
+            .equals(indicesByPredicate.apply(idx -> idx.isHidden() == false && idx.isStateOpen()));
         assert Set.of(visibleClosedIndices)
-            .equals(indicesByPredicate.apply(idx -> idx.isHidden() == false && idx.getState() == IndexMetadata.State.CLOSE));
+            .equals(indicesByPredicate.apply(idx -> idx.isHidden() == false && idx.isStateClose()));
         return true;
     }
 
@@ -571,8 +571,8 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
         final String[] updatedClosedIndices;
         final String[] updatedVisibleOpenIndices;
         final String[] updatedVisibleClosedIndices;
-        switch (index.getState()) {
-            case OPEN -> {
+
+            if(index.isStateOpen()) {
                 updatedOpenIndices = ArrayUtils.append(allOpenIndices, indexName);
                 if (index.isHidden() == false) {
                     updatedVisibleOpenIndices = ArrayUtils.append(visibleOpenIndices, indexName);
@@ -582,7 +582,7 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
                 updatedVisibleClosedIndices = visibleClosedIndices;
                 updatedClosedIndices = allClosedIndices;
             }
-            case CLOSE -> {
+           else if(index.isStateClose()) {
                 updatedOpenIndices = allOpenIndices;
                 updatedClosedIndices = ArrayUtils.append(allClosedIndices, indexName);
                 updatedVisibleOpenIndices = visibleOpenIndices;
@@ -592,8 +592,8 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
                     updatedVisibleClosedIndices = visibleClosedIndices;
                 }
             }
-            default -> throw new AssertionError("impossible, index is either open or closed");
-        }
+            else{ throw new AssertionError("impossible, index is either open or closed");}
+
 
         final MappingMetadata mappingMetadata = index.mapping();
         final Map<String, MappingMetadata> updatedMappingsByHash;
@@ -626,7 +626,7 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
             settings,
             hashesOfConsistentSettings,
             totalNumberOfShards + index.getTotalNumberOfShards(),
-            totalOpenIndexShards + (index.getState() == IndexMetadata.State.OPEN ? index.getTotalNumberOfShards() : 0),
+            totalOpenIndexShards + (index.isStateOpen()? index.getTotalNumberOfShards() : 0),
             indicesMap,
             updatedAliases,
             templates,
@@ -1938,6 +1938,7 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
             }
         }
 
+
         private Builder putAlias(String alias, Index index) {
             Objects.requireNonNull(alias);
             Objects.requireNonNull(index);
@@ -2305,13 +2306,13 @@ public class Metadata extends AbstractCollection<IndexMetadata> implements Diffa
                 if (visible) {
                     visibleIndices.add(name);
                 }
-                if (indexMetadata.getState() == IndexMetadata.State.OPEN) {
+                if (indexMetadata.isStateOpen()) {
                     totalOpenIndexShards += indexMetadata.getTotalNumberOfShards();
                     allOpenIndices.add(name);
                     if (visible) {
                         visibleOpenIndices.add(name);
                     }
-                } else if (indexMetadata.getState() == IndexMetadata.State.CLOSE) {
+                } else if (indexMetadata.isStateClose()) {
                     allClosedIndices.add(name);
                     if (visible) {
                         visibleClosedIndices.add(name);
